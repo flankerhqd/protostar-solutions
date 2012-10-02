@@ -78,7 +78,7 @@ root
 
 Method 3)
 =============
-The execl method from Hacker's Hut (but we cn do easier without printf, if we overcome the '0' parameter problem in another way):
+The execl method from Hacker's Hut (but we can do easier without printf, if we overcome the '0' parameter problem in another way):
 
 Try with this payload: |"A" * 80| execl() address | exit() address | fav | fav | envp |
 - fav is in environment variable 
