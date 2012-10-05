@@ -16,6 +16,10 @@ void winner()
 
 int main(int argc, char **argv)
 {
+    register int ebp asm("ebp");  
+    register int esp asm("esp");  
+    printf("esp:0x%08x\nebp:0x%08x\n", esp, ebp);
+    
 	struct internet *i1, *i2, *i3;
 
 	i1 = malloc(sizeof(struct internet));
