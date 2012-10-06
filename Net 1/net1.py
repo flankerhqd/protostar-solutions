@@ -15,7 +15,6 @@ def solve():
     print "Received: %d" % (wanted)
      
     s.send(str(wanted))
-    time.sleep(2)
     answer =  s.recv(1024)
     print answer
      
